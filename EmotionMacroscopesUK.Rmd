@@ -1,0 +1,204 @@
+---
+title: "Social media emotion macroscopes reflect emotional experiences in society at large"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+author: David Garcia, Max Pellert, Jana Lasser, Hannah Metzler
+output: 
+  html_document
+---
+
+```{r, echo=FALSE, message=FALSE, results='hide'}
+Sys.setlocale("LC_TIME", "en_US.UTF-8")
+
+library(dplyr) #dplyr_1.0.3
+library(ggplot2) #ggplot2_3.3.2
+library(ggpubr) #ggpubr_0.4.0
+library(readxl) #readxl_1.3.1
+library(zoo) #zoo_1.8-8
+library(DCCA) #DCCA_0.1.1 
+library(sandwich) #sandwich_3.0-1
+library(tseries) #tseries_0.10-47
+library(lmtest) #lmtest_0.9-38 
+library(knitr) #knitr_1.30
+library(psych) #psych_2.1.6
+library(plotly) #plotly_4.9.2.1
+options(scipen = 10)
+
+source("Functions.R")
+
+
+plotTSinteractive <- function(df1, df2, var1, var2, col1, col2, label1, label2, title="Time series comparison", ylab="measurement", ymin=NA, ymax=NA, frac=T)
+{
+  w1 <- as.numeric(df1[[var1]])
+  w2 <- as.numeric(df2[[var2]])
+
+  ddf1 <- data.frame(day=as.Date(df1$day), y1=w1)
+  ddf2 <- data.frame(day=as.Date(df2$day), y2=w2)
+  df <- inner_join(ddf1, ddf2, by="day")
+  df <- data.frame(day=rep(df$day,2), y=c(df$y1,df$y2), dataset=c(rep(label1, nrow(df)), rep(label2, nrow(df))))
+  
+  if (frac)
+  {
+    df$fraction <- paste(as.character(round(100*df$y,2)), "%")
+  }
+  if (!frac)
+  {
+    df$meanscore <- round(df$y,2)
+  }
+  df$y[df$dataset==label1] <- scale(df$y[df$dataset==label1])
+  df$y[df$dataset==label2] <- scale(df$y[df$dataset==label2])
+  
+  df$lastday <- as.Date(df$day)
+  if (frac)
+  {
+    plt <- ggplot(df, aes(x=lastday, y=y, color=dataset, label=fraction)) + geom_line() + 
+    theme_bw() + theme(legend.position="bottom") +
+    scale_color_manual(values=c(col1, col2))+ xlab("Date") + ylab(ylab)  + ggtitle(title) + geom_vline(xintercept = as.Date("2020-11-01"), color=rgb(0,0,0,0.5))
+  }
+   if (!frac)
+  {
+    plt <- ggplot(df, aes(x=lastday, y=y, color=dataset, label=meanscore)) + geom_line() + 
+    theme_bw() + theme(legend.position="bottom") +
+    scale_color_manual(values=c(col1, col2))+ xlab("Date") + ylab(ylab)  + ggtitle(title) + geom_vline(xintercept = as.Date("2020-11-01"), color=rgb(0,0,0,0.5))
+  }
+  
+  if (!is.na(ymin) & ! is.na(ymax))
+  {
+    plt <- plt + ylim(ymin, ymax)
+  }
+  return(plt)
+}
+
+```
+
+```{r, echo=FALSE, message=FALSE, results='hide'}
+#download.file("https://yougov.co.uk/_pubapis/v5/uk/trackers/britains-mood-measured-weekly/download/", destfile="YouGov/britains-mood-measured-weekly.xlsx")
+Yougovdf <- processYouGov(file="Data/britains-mood-measured-weekly.xlsx", sheet="All adults")
+names(Yougovdf)[1] <- "day"
+Fdf <- processYouGov(file="Data/britains-mood-measured-weekly.xlsx", sheet="Female")
+names(Fdf)[1] <- "day"
+Mdf <- processYouGov(file="Data/britains-mood-measured-weekly.xlsx", sheet="Male")
+names(Mdf)[1] <- "day"
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=10, fig.height=3.5, warning=F}
+Tdf <- read.csv("Data/genderVolume-total.csv")
+Tdf2 <- read.csv("Data/genderVolume-sadness.csv")
+TwitterUKdf <- inner_join(Tdf, Tdf2, by="day")
+names(TwitterUKdf) <- c("day", "n.male", "n.female", "nLIWC.male",  "nLIWC.female")
+TwitterUKdf$signal <- TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female
+TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
+
+Yougovdf$r <- Yougovdf$sad/100
+
+Twittersel <- left_join(Yougovdf, TwitterUKdf, by="day")
+Twittersel$r <- Twittersel$w
+
+ggplotly(plotTSinteractive(Twittersel, Yougovdf, "r", "r", "darkblue", "darkred", "Twitter", "Yougov", title="Sad in Yougov and Sad in Twitter (LIWC)", ylab="Rescaled Sadness", ymin=-2.5, ymax=5))
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=10, fig.height=3.5}
+genderdf <- read.csv("Data/RobertaAggGender.csv")
+
+genderdf %>% filter(gender=="male") -> maledf
+maledf$signalM <- maledf$mnsadness
+genderdf %>% filter(gender=="female") -> femaledf
+femaledf$signalF <- femaledf$mnsadness
+TwitterUKdf <- inner_join(maledf, femaledf, by="date")
+TwitterUKdf$signal <- (TwitterUKdf$signalF+TwitterUKdf$signalM)/2
+names(TwitterUKdf)[2] <- "day"
+
+TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
+
+Yougovdf$r <- Yougovdf$sad/100
+
+Twittersel <- left_join(Yougovdf, TwitterUKdf, by="day")
+Twittersel$r <- Twittersel$w
+
+ggplotly(plotTSinteractive(Twittersel, Yougovdf, "r", "r","darkorange", "darkred","Twitter", "Yougov", title="Sad in Yougov and Sad in Twitter (RoBERTa)", ylab="Rescaled Sadness", ymin=-2.5, ymax=5, frac=T))
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=10, fig.height=3.5}
+Tdf <- read.csv("Data/genderVolume-total.csv")
+Tdf2 <- read.csv("Data/genderVolume-anxiety.csv")
+TwitterUKdf <- inner_join(Tdf, Tdf2, by="day")
+names(TwitterUKdf) <- c("day", "n.male", "n.female", "nLIWC.male",  "nLIWC.female")
+TwitterUKdf$signal <- TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female
+TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
+
+Yougovdf$r <- Yougovdf$scared/100
+
+Twittersel <- left_join(Yougovdf, TwitterUKdf, by="day")
+Twittersel$r <- Twittersel$w
+
+ggplotly(plotTSinteractive(Twittersel, Yougovdf, "r", "r", "darkblue", "darkred", "Twitter", "Yougov", title="Scared in Yougov and Anxiety in Twitter (LIWC)", ylab="Rescaled Anxiety", ymin=-2.5, ymax=7.5))
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=10, fig.height=3.5}
+genderdf <- read.csv("Data/RobertaAggGender.csv")
+
+genderdf %>% filter(gender=="male") -> maledf
+maledf$signalM <- maledf$mnfear
+genderdf %>% filter(gender=="female") -> femaledf
+femaledf$signalF <- femaledf$mnfear
+TwitterUKdf <- inner_join(maledf, femaledf, by="date")
+TwitterUKdf$signal <- (TwitterUKdf$signalF+TwitterUKdf$signalM)/2
+names(TwitterUKdf)[2] <- "day"
+
+TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
+
+Yougovdf$r <- Yougovdf$scared/100
+
+Twittersel <- left_join(Yougovdf, TwitterUKdf, by="day")
+Twittersel$r <- Twittersel$w
+
+ggplotly(plotTSinteractive(Twittersel, Yougovdf, "r", "r", "darkorange", "darkred", "Twitter", "Yougov", title="Scared in Yougov and Fear in Twitter (RoBERTa)", ylab="Rescaled Fear", ymin=-2.5, ymax=7.5, frac=T))
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=10, fig.height=3.5}
+Tdf <- read.csv("Data/genderVolume-total.csv")
+Tdf2 <- read.csv("Data/genderVolume-posemo.csv")
+TwitterUKdf <- inner_join(Tdf, Tdf2, by="day")
+names(TwitterUKdf) <- c("day", "n.male", "n.female", "nLIWC.male",  "nLIWC.female")
+TwitterUKdf$signal <- TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female
+TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
+
+Yougovdf$r <- Yougovdf$happy/100
+
+Twittersel <- left_join(Yougovdf, TwitterUKdf, by="day")
+Twittersel$r <- Twittersel$w
+
+ggplotly(plotTSinteractive(Twittersel, Yougovdf, "r", "r", "darkblue", "darkred",  "Twitter", "Yougov", title="Happy in Yougov and Positive in Twitter (LIWC)", ylab="Rescaled Positive", ymin=-3.5, ymax=4))
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=10, fig.height=3.5}
+genderdf <- read.csv("Data/RobertaAggGender.csv")
+
+genderdf %>% filter(gender=="male") -> maledf
+maledf$signalM <- maledf$mnjoy
+genderdf %>% filter(gender=="female") -> femaledf
+femaledf$signalF <- femaledf$mnjoy
+TwitterUKdf <- inner_join(maledf, femaledf, by="date")
+TwitterUKdf$signal <- (TwitterUKdf$signalF+TwitterUKdf$signalM)/2
+names(TwitterUKdf)[2] <- "day"
+
+TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
+
+Yougovdf$r <- Yougovdf$happy/100
+
+Twittersel <- left_join(Yougovdf, TwitterUKdf, by="day")
+Twittersel$r <- Twittersel$w
+
+ggplotly(plotTSinteractive(Twittersel, Yougovdf, "r", "r", "darkorange", "darkred", "Twitter", "Yougov", title="Happy in Yougov and Joy in Twitter (RoBERTa)", ylab="Rescaled Joy", ymin=-3.5, ymax=4, frac=T))
+
+```
+
