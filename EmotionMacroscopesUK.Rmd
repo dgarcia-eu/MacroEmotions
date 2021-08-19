@@ -86,7 +86,7 @@ Tdf <- read.csv("Data/genderVolume-total.csv")
 Tdf2 <- read.csv("Data/genderVolume-sadness.csv")
 TwitterUKdf <- inner_join(Tdf, Tdf2, by="day")
 names(TwitterUKdf) <- c("day", "n.male", "n.female", "nLIWC.male",  "nLIWC.female")
-TwitterUKdf$signal <- TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female
+TwitterUKdf$signal <- (TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female)/2
 TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
 
 Yougovdf$r <- Yougovdf$sad/100
@@ -126,7 +126,7 @@ Tdf <- read.csv("Data/genderVolume-total.csv")
 Tdf2 <- read.csv("Data/genderVolume-anxiety.csv")
 TwitterUKdf <- inner_join(Tdf, Tdf2, by="day")
 names(TwitterUKdf) <- c("day", "n.male", "n.female", "nLIWC.male",  "nLIWC.female")
-TwitterUKdf$signal <- TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female
+TwitterUKdf$signal <- (TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female)/2
 TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
 
 Yougovdf$r <- Yougovdf$scared/100
@@ -167,7 +167,7 @@ Tdf <- read.csv("Data/genderVolume-total.csv")
 Tdf2 <- read.csv("Data/genderVolume-posemo.csv")
 TwitterUKdf <- inner_join(Tdf, Tdf2, by="day")
 names(TwitterUKdf) <- c("day", "n.male", "n.female", "nLIWC.male",  "nLIWC.female")
-TwitterUKdf$signal <- TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female
+TwitterUKdf$signal <- (TwitterUKdf$nLIWC.male/TwitterUKdf$n.male + TwitterUKdf$nLIWC.female/TwitterUKdf$n.female)/2
 TwitterUKdf$w <- rollmean(TwitterUKdf$signal, k=7, align="right", na.pad = T)
 
 Yougovdf$r <- Yougovdf$happy/100
